@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Ken's Trello Checklister</title>
+
+<!-- 
+Version 1.0 - 11/23/2019
+(c) Ken Polleck, 2019
+
+Used Trello reference material from https://developers.trello.com/docs/getting-started-with-clientjs (Trello javascript library)
+and https://developers.trello.com/reference (REST API doc)
+
+NOTE!!!  This file will not work as-is.  Scan this file for "xxx" to configure your own information there.
+
+Also note:  You will have to run this file on a web server.  It will not work running from your hard drive as file:///C:/<PAHT>/TrelloChecklisterExample.html .  Doing so will give an error message of "Invalid return_url".
+
+-->
+
+<script
+  src="https://code.jquery.com/jquery-3.3.1.min.js"
+  integrity="sha256-FgpCb/KJQlLNfOu91ta32o/NMZxltwRo8QtmkMRdAu8="
+  crossorigin="anonymous">
+</script>
+
+<script src="https://api.trello.com/1/client.js?key=xxx">
+</script>
+
+<script>
+
+var authenticationSuccess = function() {
+  console.log('Successful authentication.  Token:' + Trello.token());
+};
+var authenticationFailure = function() {
+  console.log('Failed authentication');
+};
+
+var getSuccess = function() {
+  console.log('Successful GET');
+};
+var getFailure = function() {
+  console.log('Failed GET');
+};
+
+var authorize = function() {
+  window.Trello.authorize({
+	type: 'popup',
+	name: 'Ken\'s Trello Checklister',
+	scope: {
+	  read: 'true',
+	  write: 'true' },
+	expiration: 'never',
+	success: authenticationSuccess,
+	error: authenticationFailure
+  });
+};
+
+// Member info
+var memberInfo = function() {
+	Trello.get('members/me', 'fields: "id,name"', function (data) {
+		document.writeln("<p>Member ID: " + data.id);
+		document.writeln("<p>Member Name: " + data.name);
+		}, getFailure);
+	}
+	
+
+// Board List
+var boardList = function() {
+	document.writeln("<ul>");
+	Trello.get('/members/me/boards', 
+		'fields: "id"',
+		function (data) {
+		$.each(data, function(index, value) {
+			document.writeln("<li>" + value.name);
+			});
+		}, getFailure);
+	document.writeln("</ul>");
+	}
+	
+var boardName = function(id) {
+	Trello.boards.get(id, function (data) {
+		document.writeln("<p>Board Name: " + data.name);
+		}, getFailure);
+	}
+
+var boardCards = function(id) {
+	Trello.get(
+		"/board/" + id + "/cards",
+		function (cards) {
+			$.each(cards,
+				function(index, card) {	
+					document.writeln("<li>" + card.name);
+				}
+			)
+		}
+	)
+}
+
+var itemPosArray = [];
+var itemTextArray = [];
+
+var addToDiv = function(pos,card,checkitem) { // needed because the callbacks don't return the checklists in the same order as listed in Trello
+	var len = itemPosArray.length;
+	for (var i = 0; i < len; i++) {
+		if (pos < itemPosArray[i]) {
+			break;
+		}
+	}
+	// console.log(card + "Adding: " + checkitem);
+	itemPosArray.splice(i, 0, pos);
+	itemTextArray.splice(i, 0, card + "," + checkitem);
+	
+	var sorted = "";
+	var len = itemPosArray.length;
+	for (var i = 0; i < len; i++) {
+		sorted = sorted += itemTextArray[i] + "<br>";
+	}
+	document.getElementById("main").innerHTML = sorted;
+}
+
+
+</script>
+
+</head>
+
+<body>
+<div id="main">
+Getting Checklist Items from Trello...
+</div>
+<script>
+
+authorize()
+// document.writeln(Trello.token());
+// document.writeln(Trello.get("members/me",'{fields: "username,fullName"}',getSuccess,getFailure));
+
+// URLs are something like:
+// https://api.trello.com/1/boards/<YOUR_BOARD_ID>/cards?fields=name,url&key=<YOUR_APP_KEY>
+
+// memberInfo();
+// boardList();
+
+// My Board
+var myBoardID = 'xxx';
+var onlyOnList = "xxx";
+
+// boardName(myBoardID);
+// boardCards(myBoardID);
+
+// Get items on checklists
+
+Trello.get(
+	"/board/" + myBoardID + "/lists",
+
+	function (lists) {
+		jQuery.each(lists,				// could have used $.each() as $ is a shortcut for jQuery
+			function(index, list) {	
+				// document.writeln("<li> List: " + list.name);
+				Trello.get(
+					"/list/" + list.id + "/cards",
+					function (cards) {
+						$.each(cards,
+							function(index, card) {	
+								// document.writeln("<li> Card: " + card.name);
+								Trello.get(
+									"/card/" + card.id + "/checklists",
+									function (checklists) {
+										$.each(checklists,
+											function(index, checklist) {
+												// document.writeln("<li> Checklist: " + checklist.name);
+												Trello.get(
+													"/checklist/" + checklist.id + "/checkitems",
+													function (checkitems) {
+														$.each(checkitems,
+															function(index, checkitem) {
+																// document.writeln("<li> Checkitem: " + checkitem.name);
+																if (list.name == onlyOnList && checkitem.state=="incomplete") {
+																	//document.writeln(card.pos + "," + card.name + "," + checkitem.name + "<br>");
+																	addToDiv(card.pos,card.name,checkitem.name);
+																}
+															}
+														);
+													}, getFailure
+												);
+											}
+										);
+									}, getFailure
+								);
+							}
+						);
+					}, getFailure
+				);
+			}
+		);
+	}, getFailure
+);
+
+</script>
+
+</body>
+</html>
